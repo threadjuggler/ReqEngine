@@ -2,7 +2,7 @@ services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "9000:9000"
     volumes:
       - .:/app
     env_file:
@@ -14,6 +14,7 @@ services:
 
   db:
     image: mariadb:11
+    command: --innodb-use-native-aio=0
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MARIADB_DATABASE: ${DB_NAME}
@@ -23,6 +24,7 @@ services:
       - "3302:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
+      - ./init_data.sql:/docker-entrypoint-initdb.d/init_data.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
