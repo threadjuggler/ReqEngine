@@ -1,6 +1,6 @@
 # ReqEngine
 
-This is a python fastapi application to create, store and modifiy requirements for dafety related applications
+This is a python fastapi application to create, store, modifiy and administer requirements for safety related applications
 
 proudly developed with the help of claude ai.
 

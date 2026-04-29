@@ -1,0 +1,31 @@
+
+A linkobject is an object that represents a link between two other objects in the database
+all linobjects shall be stored in the table "links"  
+it shall have the following attributes:
+id: int unique for database operations 
+type: int in range [1..20] representing a type of the link 
+relationsship: string of 30 characters 
+link_from: id of an object (other requirement or testcase ) where the link starts 
+destination: id of another object where the link is pointing to 
+
+
+
+A requirements is an object with the following attributes:
+all requirements shall be storesd in the table "requirements"
+- id:  int unique for database operations
+- id_in_project:  is a string with up to 100 characters the starts with a project name and an attached number 
+the number is increasing and unique in the project. when a requirement is created a number is increased and added to the project_name
+exmple: id_in_project = f'PizzaOven2020-{id_in_prj_number:6d}' (always show 6 digits and is a natural number)
+- author: user id of the user created the requirement 
+- created_on: date when it was created
+- last_modified_on: date when the rquirement was edited last time
+- last_modified_by: user id of the user who modified the requirement at last 
+- text: string with up to 5000 characters 
+- title: string of 150 characters  
+- type: int in the range  [1..20]
+- version: int starting at 1 counting up when the requirement was edited
+- state : int in the range [1...20]
+- approved: array of user ids who have given positive approval
+- linked_objects: array of 'link_objects that are linked to this requirement
+
+
