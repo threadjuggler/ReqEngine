@@ -1,3 +1,5 @@
+"""SQLAlchemy ORM models and Pydantic schemas for the users domain."""
+
 from sqlalchemy import Column, Integer, String, DateTime
 from pydantic import BaseModel
 from datetime import datetime
@@ -6,6 +8,8 @@ from database import Base
 
 
 class User(Base):
+    """ORM mapping for the `users` table in MariaDB."""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -17,17 +21,23 @@ class User(Base):
 
 
 class UserCreate(BaseModel):
+    """Request body for creating a new user."""
+
     name: str
     role: str
     password: str
 
 
 class UserLogin(BaseModel):
+    """Request body for authenticating a user."""
+
     name: str
     password: str
 
 
 class UserUpdate(BaseModel):
+    """Request body for partially updating a user — all fields are optional."""
+
     name: Optional[str] = None
     role: Optional[str] = None
     password: Optional[str] = None
@@ -36,6 +46,8 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(BaseModel):
+    """Response schema for user data — hashed_password is intentionally excluded."""
+
     id: int
     name: str
     role: str

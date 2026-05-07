@@ -1,3 +1,5 @@
+"""Entry point for the ReqEngine API. Registers all routers."""
+
 from fastapi import FastAPI
 from routers import auth, startx
 
