@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ReqEngine — Dashboard</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f4f4f6;
+        margin: 0;
+      }
+      header {
+        background: #2b6cb0;
+        color: #fff;
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      header a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 0.9rem;
+      }
+      header a:hover { text-decoration: underline; }
+      main {
+        max-width: 920px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>ReqEngine — Dashboard</strong>
+      <span>Signed in as <em>{{ current_user.name }}</em> · <a href="/logout">Sign out</a></span>
+    </header>
+    <main>
+    </main>
+  </body>
+</html>

@@ -33,6 +33,7 @@ async def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = User(
         name=user.name,
         role=user.role,
+        email=user.email,
         hashed_password=hashlib.sha256(user.password.encode()).hexdigest(),
     )
     db.add(db_user)
@@ -86,6 +87,8 @@ async def edit_user(user_id: int, updates: UserUpdate, db: Session = Depends(get
         db_user.name = updates.name
     if updates.role is not None:
         db_user.role = updates.role
+    if updates.email is not None:
+        db_user.email = updates.email
     if updates.password is not None:
         db_user.hashed_password = hashlib.sha256(updates.password.encode()).hexdigest()
     if updates.log_in_active is not None:

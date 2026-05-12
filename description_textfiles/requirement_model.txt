@@ -1,7 +1,16 @@
 
 
+Project:
+- id:  int unique for database operations, all objects that belong to this project shall be searched by that 
+- title: string 200
+- id_for_linked_objects:  is a string with up to 100 characters , linked objects shall use that string in their "id_in_project"
+ 
 
+Document:
+- id:  int unique for database operations
+- id_in_project:  is a string with up to 100 characters the starts with a project name and an attached number 
 
+Link:
 A linkobject is an object that represents a link between two other objects in the database
 all linobjects shall be stored in the table "links"  
 it shall have the following attributes:
@@ -13,7 +22,7 @@ link_from: id of an object (other requirement or testcase ) where the link start
 destination: id of another object where the link is pointing to 
 
 
-
+Requirement:
 A requirements is an object with the following attributes:
 all requirements shall be storesd in the table "requirements"
 - id:  int unique for database operations
@@ -32,4 +41,6 @@ exmple: id_in_project = f'PizzaOven2020-{id_in_prj_number:6d}' (always show 6 di
 - approved: array of user ids who have given positive approval
 - linked_objects: array of 'link_objects that are linked to this requirement
 
-
+Testcase:
+- id:  int unique for database operations
+- id_in_project:  is a string with up to 100 characters the starts with a project name and an attached number 

@@ -8,12 +8,15 @@
 - DB credentials are read from a .env file via python-dotenv (keys: DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME)
 
 ### Database table: `users`
-The table already exists and is created by an init SQL script. Do NOT use SQLAlchemy's create_all — map to the existing table.
+The schema is owned by Alembic migrations (see `alembic/versions/`). The API container runs
+`alembic upgrade head` on startup before serving requests. Do NOT use SQLAlchemy's create_all
+and do NOT modify the schema by hand — every change must be a new Alembic revision.
 
 Columns:
 - id              INT, primary key, AUTO_INCREMENT, starts at 10000
 - name            VARCHAR(80), NOT NULL
 - role            VARCHAR(20), NOT NULL
+- email           VARCHAR(255), NOT NULL
 - hashed_password VARCHAR(200), NOT NULL
 - log_in_active   INT, NOT NULL, DEFAULT 0, only values 0 or 1 allowed
 - last_log_in     DATE, nullable
@@ -23,8 +26,8 @@ Define a class User(Base) with __tablename__ = "users" mapping each column above
 Base is imported from database.py (the shared DeclarativeBase instance).
 
 ### Pydantic schemas (also in models.py)
-- UserCreate   — request body for creating a user: fields name (str), role (str), password (str)
-- UserResponse — response schema: fields id (int), name (str), role (str), log_in_active (int), last_log_in (Optional[date])
+- UserCreate   — request body for creating a user: fields name (str), role (str), email (str), password (str)
+- UserResponse — response schema: fields id (int), name (str), role (str), email (str), log_in_active (int), last_log_in (Optional[date])
   hashed_password must NOT appear in UserResponse.
 
 ### Database session (database.py)
