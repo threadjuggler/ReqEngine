@@ -92,8 +92,9 @@ class RequirementUpdate(BaseModel):
 
 
 class LinkSideOut(BaseModel):
-    """Compact representation of one side of a link (the 'other' requirement)."""
+    """Compact representation of one side of a link — may be a requirement or a testcase."""
 
+    kind: str
     id: int
     project_id: str
     title: str
@@ -106,6 +107,8 @@ class LinkItemOut(BaseModel):
 
     link_id: int
     link_type: str
+    start_project_id: str
+    destination_project_id: str
     other_side: LinkSideOut
 
 

@@ -106,6 +106,14 @@ export async function createLink(body: LinkCreateBody): Promise<LinkOut> {
   });
 }
 
+/** Update an existing link's type and endpoints (same body shape as create). */
+export async function updateLink(linkId: number, body: LinkCreateBody): Promise<LinkOut> {
+  return request<LinkOut>(`/links/${linkId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
 /** Delete a link by its numeric id. */
 export async function deleteLink(linkId: number): Promise<void> {
   return request<void>(`/links/${linkId}`, { method: 'DELETE' });

@@ -286,6 +286,27 @@ tbody tr.clickable-row:hover {
   font-family: inherit;
 }
 
+.link-testcase {
+  color: var(--color-text);
+}
+
+.kind-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 4px;
+  border-radius: 3px;
+  background: #e3e8ef;
+  color: #334;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.links-row-actions {
+  white-space: nowrap;
+  display: flex;
+  gap: 4px;
+}
+
 .links-footer {
   margin-top: 8px;
   display: flex;

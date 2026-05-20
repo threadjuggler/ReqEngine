@@ -1,17 +1,11 @@
 """Requirement ORM model."""
 
-from __future__ import annotations
-
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-
-if TYPE_CHECKING:
-    from app.models.link import Link
 
 
 class Requirement(Base):
@@ -35,17 +29,3 @@ class Requirement(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     revision: Mapped[str] = mapped_column(String(30), nullable=False, default="0.1")
-
-    # Relationships to links (cascade delete handled by FK ondelete=CASCADE + ORM cascade)
-    links_as_start: Mapped[list[Link]] = relationship(
-        "Link",
-        foreign_keys="Link.link_start",
-        back_populates="start_requirement",
-        cascade="all, delete-orphan",
-    )
-    links_as_destination: Mapped[list[Link]] = relationship(
-        "Link",
-        foreign_keys="Link.link_destination",
-        back_populates="destination_requirement",
-        cascade="all, delete-orphan",
-    )

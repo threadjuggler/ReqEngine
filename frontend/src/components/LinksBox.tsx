@@ -1,14 +1,14 @@
 /**
  * Scrollable box listing all links for a requirement.
- * Each row shows link type, the other side project_id+title as a clickable link,
- * and a delete button. Navigating to another requirement confirms if form is dirty.
+ * Each row shows link type, the other-side project_id+title, and edit/delete buttons.
+ * Other-side hyperlink navigates; Edit opens the link dialog prefilled; − deletes.
  */
 
 import { useNavigate } from 'react-router-dom';
 import { deleteLink } from '../api/client';
-import type { LinkItem } from '../api/types';
+import type { LinkItem, LinkType } from '../api/types';
 import { LINK_TYPE_LABELS } from '../api/types';
-import { CreateLinkDialog } from './CreateLinkDialog';
+import { CreateLinkDialog, type LinkDialogEditing } from './CreateLinkDialog';
 import { useState } from 'react';
 
 interface LinksBoxProps {
@@ -18,18 +18,19 @@ interface LinksBoxProps {
   isDirty: boolean;
   /** Whether this is the unsaved new-requirement form (disables Create Link). */
   isNew: boolean;
-  /** Called after a link is deleted or created so the parent refreshes data. */
+  /** Called after a link is created, edited, or deleted so the parent refreshes. */
   onLinksChanged: () => void;
 }
 
 /**
- * Renders the links table with delete buttons and a Create Link button.
- * Navigation to another requirement prompts if isDirty is true.
- * Create Link is disabled on the new-requirement form until first save.
+ * Renders the links table with edit and delete buttons and a Create Link button.
+ * Edit reuses the same dialog as Create, prefilled with the existing values.
+ * Other-side hyperlink navigation prompts if isDirty is true.
  */
 export function LinksBox({ links, isDirty, isNew, onLinksChanged }: LinksBoxProps) {
   const navigate = useNavigate();
-  const [showDialog, setShowDialog] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<LinkDialogEditing | null>(null);
 
   /** Navigate to the other side of a link, confirming if form is dirty. */
   function handleNavigate(otherId: number) {
@@ -52,6 +53,16 @@ export function LinksBox({ links, isDirty, isNew, onLinksChanged }: LinksBoxProp
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete link.');
     }
+  }
+
+  /** Open the link dialog in edit mode with the row's current values prefilled. */
+  function handleEdit(lnk: LinkItem) {
+    setEditing({
+      link_id: lnk.link_id,
+      link_type: lnk.link_type as LinkType,
+      start_project_id: lnk.start_project_id,
+      destination_project_id: lnk.destination_project_id,
+    });
   }
 
   return (
@@ -80,18 +91,36 @@ export function LinksBox({ links, isDirty, isNew, onLinksChanged }: LinksBoxProp
                       lnk.link_type}
                   </td>
                   <td>
-                    <button
-                      className="link-href"
-                      onClick={() => handleNavigate(lnk.other_side.id)}
-                      title={`Navigate to ${lnk.other_side.project_id}`}
-                    >
-                      {lnk.other_side.project_id} — {lnk.other_side.title}
-                    </button>
+                    {lnk.other_side.kind === 'requirement' ? (
+                      <button
+                        className="link-href"
+                        onClick={() => handleNavigate(lnk.other_side.id)}
+                        title={`Navigate to ${lnk.other_side.project_id}`}
+                      >
+                        {lnk.other_side.project_id} — {lnk.other_side.title}
+                      </button>
+                    ) : (
+                      <span
+                        className="link-testcase"
+                        title="Testcase (no editor in step 1)"
+                      >
+                        <span className="kind-badge">Testcase</span>{' '}
+                        {lnk.other_side.project_id} — {lnk.other_side.title}
+                      </span>
+                    )}
                   </td>
-                  <td>
+                  <td className="links-row-actions">
+                    <button
+                      className="btn-secondary btn-sm"
+                      onClick={() => handleEdit(lnk)}
+                      title="Edit this link"
+                    >
+                      ✎
+                    </button>
                     <button
                       className="btn-danger btn-sm"
                       onClick={() => void handleDelete(lnk.link_id)}
+                      title="Delete this link"
                     >
                       −
                     </button>
@@ -106,7 +135,7 @@ export function LinksBox({ links, isDirty, isNew, onLinksChanged }: LinksBoxProp
       <div className="links-footer">
         <button
           className="btn-secondary"
-          onClick={() => setShowDialog(true)}
+          onClick={() => setShowCreate(true)}
           disabled={isNew}
           title={isNew ? 'Save the requirement first before adding links.' : undefined}
         >
@@ -119,13 +148,24 @@ export function LinksBox({ links, isDirty, isNew, onLinksChanged }: LinksBoxProp
         )}
       </div>
 
-      {showDialog && (
+      {showCreate && (
         <CreateLinkDialog
           onCreated={() => {
-            setShowDialog(false);
+            setShowCreate(false);
             onLinksChanged();
           }}
-          onDiscard={() => setShowDialog(false)}
+          onDiscard={() => setShowCreate(false)}
+        />
+      )}
+
+      {editing !== null && (
+        <CreateLinkDialog
+          editing={editing}
+          onCreated={() => {
+            setEditing(null);
+            onLinksChanged();
+          }}
+          onDiscard={() => setEditing(null)}
         />
       )}
     </div>

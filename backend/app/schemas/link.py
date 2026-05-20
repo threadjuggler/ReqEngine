@@ -36,7 +36,9 @@ class LinkOut(BaseModel):
     id: int
     project_id: str
     link_type: str
+    link_start_kind: str
     link_start: int
+    link_destination_kind: str
     link_destination: int
     created_on: datetime
     last_edited_on: datetime

@@ -21,8 +21,12 @@ export type RequirementType =
 /** Allowed link type values. */
 export type LinkType = 'refines' | 'depends_on' | 'tested_by';
 
-/** Compact representation of one side of a link (the other requirement). */
+/** A link side can point at either a Requirement or a Testcase. */
+export type LinkSideKind = 'requirement' | 'testcase';
+
+/** Compact representation of one side of a link — kind plus identifying fields. */
 export interface LinkSide {
+  kind: LinkSideKind;
   id: number;
   project_id: string;
   title: string;
@@ -32,6 +36,8 @@ export interface LinkSide {
 export interface LinkItem {
   link_id: number;
   link_type: string;
+  start_project_id: string;
+  destination_project_id: string;
   other_side: LinkSide;
 }
 
@@ -93,7 +99,9 @@ export interface LinkOut {
   id: number;
   project_id: string;
   link_type: string;
+  link_start_kind: LinkSideKind;
   link_start: number;
+  link_destination_kind: LinkSideKind;
   link_destination: number;
   created_on: string;
   last_edited_on: string;

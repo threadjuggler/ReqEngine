@@ -3,14 +3,14 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.deps import get_current_user
 from app.models.link import Link
 from app.models.requirement import Requirement
+from app.models.testcase import Testcase
 from app.schemas.requirement import (
     LinkItemOut,
     LinkSideOut,
@@ -50,36 +50,76 @@ async def get_requirement(
     req_id: int,
     session: AsyncSession = Depends(get_session),
 ) -> RequirementDetailOut:
-    """Return full requirement detail including the computed list_of_links."""
-    result = await session.execute(
-        select(Requirement)
-        .options(
-            selectinload(Requirement.links_as_start).selectinload(Link.destination_requirement),
-            selectinload(Requirement.links_as_destination).selectinload(Link.start_requirement),
-        )
-        .where(Requirement.id == req_id)
-    )
+    """Return full requirement detail including the computed polymorphic list_of_links."""
+    result = await session.execute(select(Requirement).where(Requirement.id == req_id))
     req = result.scalar_one_or_none()
     if req is None:
         raise HTTPException(status_code=404, detail="Requirement not found.")
 
-    links: list[LinkItemOut] = []
-    for lnk in req.links_as_start:
-        other = lnk.destination_requirement
-        links.append(
-            LinkItemOut(
-                link_id=lnk.id,
-                link_type=lnk.link_type,
-                other_side=LinkSideOut(id=other.id, project_id=other.project_id, title=other.title),
+    # All links that touch this requirement on either side
+    link_rows = await session.execute(
+        select(Link).where(
+            or_(
+                and_(Link.link_start_kind == "requirement", Link.link_start == req_id),
+                and_(
+                    Link.link_destination_kind == "requirement",
+                    Link.link_destination == req_id,
+                ),
             )
         )
-    for lnk in req.links_as_destination:
-        other = lnk.start_requirement
+    )
+    all_links = list(link_rows.scalars().all())
+
+    # Collect every endpoint referenced (both start AND destination of every link),
+    # then batch-resolve project_ids and titles in two queries.
+    needed_req_ids: set[int] = set()
+    needed_tc_ids: set[int] = set()
+    for lnk in all_links:
+        for kind, oid in (
+            (lnk.link_start_kind, lnk.link_start),
+            (lnk.link_destination_kind, lnk.link_destination),
+        ):
+            if kind == "requirement":
+                needed_req_ids.add(oid)
+            elif kind == "testcase":
+                needed_tc_ids.add(oid)
+
+    req_map: dict[int, Requirement] = {}
+    if needed_req_ids:
+        r = await session.execute(select(Requirement).where(Requirement.id.in_(needed_req_ids)))
+        req_map = {x.id: x for x in r.scalars().all()}
+    tc_map: dict[int, Testcase] = {}
+    if needed_tc_ids:
+        t = await session.execute(select(Testcase).where(Testcase.id.in_(needed_tc_ids)))
+        tc_map = {x.id: x for x in t.scalars().all()}
+
+    def lookup(kind: str, oid: int) -> Requirement | Testcase | None:
+        """Return the ORM object for (kind, id) using the prefetched maps."""
+        return req_map.get(oid) if kind == "requirement" else tc_map.get(oid)
+
+    links: list[LinkItemOut] = []
+    for lnk in all_links:
+        start_obj = lookup(lnk.link_start_kind, lnk.link_start)
+        dest_obj = lookup(lnk.link_destination_kind, lnk.link_destination)
+        if start_obj is None or dest_obj is None:
+            # Dangling link (an endpoint was deleted) — skip
+            continue
+        if lnk.link_start_kind == "requirement" and lnk.link_start == req_id:
+            other_kind, other_obj = lnk.link_destination_kind, dest_obj
+        else:
+            other_kind, other_obj = lnk.link_start_kind, start_obj
         links.append(
             LinkItemOut(
                 link_id=lnk.id,
                 link_type=lnk.link_type,
-                other_side=LinkSideOut(id=other.id, project_id=other.project_id, title=other.title),
+                start_project_id=start_obj.project_id,
+                destination_project_id=dest_obj.project_id,
+                other_side=LinkSideOut(
+                    kind=other_kind,
+                    id=other_obj.id,
+                    project_id=other_obj.project_id,
+                    title=other_obj.title,
+                ),
             )
         )
 
@@ -154,9 +194,17 @@ async def delete_requirement(
     if req is None:
         raise HTTPException(status_code=404, detail="Requirement not found.")
 
-    # Explicit link deletion (cascade via FK ondelete should handle it, but be explicit)
+    # No more FK cascade — links are polymorphic, so app-level delete by (kind, id) match
     await session.execute(
-        delete(Link).where((Link.link_start == req_id) | (Link.link_destination == req_id))
+        delete(Link).where(
+            or_(
+                and_(Link.link_start_kind == "requirement", Link.link_start == req_id),
+                and_(
+                    Link.link_destination_kind == "requirement",
+                    Link.link_destination == req_id,
+                ),
+            )
+        )
     )
     await session.delete(req)
     await session.commit()
