@@ -1,6 +1,7 @@
 .git
 .gitignore
 .fastapivenv
+.venv
 __pycache__
 *.pyc
 *.pyo
@@ -9,3 +10,6 @@ __pycache__
 .pytest_cache
 .mypy_cache
 .ruff_cache
+node_modules
+dist
+*.log

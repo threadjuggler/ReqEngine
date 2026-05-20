@@ -1,0 +1,18 @@
+# Builds the ReqEngine frontend image and runs the Vite dev server with hot reload.
+# Build context: ./frontend (set in docker-compose.yml); dockerfile path: ./docker/Dockerfile.frontend.
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy manifests first for layer caching
+COPY package.json package-lock.json ./
+
+# Install all dependencies (including devDependencies needed for Vite dev server)
+RUN npm ci
+
+# Copy remaining source
+COPY . .
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

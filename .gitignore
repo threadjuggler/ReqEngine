@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ReqEngine project additions
+node_modules/
+.venv/
+# Robot Framework run artifacts (default output location)
+output.xml
+log.html
+report.html
+

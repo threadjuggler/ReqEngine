@@ -1,0 +1,74 @@
+# Brings up Postgres, Redis, backend (FastAPI/uvicorn), and frontend (Vite dev server).
+# Usage: docker compose up --build
+# No .env file is required; all values are defined here or overridable via environment.
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+      POSTGRES_DB: reqengine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d reqengine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://appuser:apppassword@postgres:5432/reqengine
+      REDIS_URL: redis://redis:6379/0
+      UVICORN_WORKERS: "4"
+      CORS_ORIGINS: "http://localhost:5173"
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind-mount source directories so code changes reflect after container restart.
+      # Note: 4-worker mode means --reload is NOT active; restart the container to
+      # pick up backend/app or backend/alembic changes.
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    depends_on:
+      - backend
+    environment:
+      # Browser-side URL — points at the host port mapping for the backend.
+      VITE_API_BASE_URL: "http://localhost:8000/api"
+    ports:
+      - "5173:5173"
+    volumes:
+      # Bind-mount source files so Vite hot-reloads on edits.
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      # Named anonymous volume prevents the host's node_modules from shadowing
+      # the container-installed modules.
+      - frontend_node_modules:/app/node_modules
+
+volumes:
+  postgres_data:
+  frontend_node_modules:
