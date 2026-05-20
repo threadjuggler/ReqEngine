@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ReqEngine — Sign in</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f4f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+      .card {
+        background: #fff;
+        padding: 2rem 2.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        min-width: 320px;
+      }
+      h1 {
+        margin: 0 0 1.5rem 0;
+        font-size: 1.25rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.75rem;
+        font-size: 0.85rem;
+        color: #444;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-top: 0.25rem;
+      }
+      button {
+        margin-top: 1.25rem;
+        width: 100%;
+        padding: 0.6rem;
+        background: #2b6cb0;
+        color: #fff;
+        border: 0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.95rem;
+      }
+      button:hover { background: #2c5282; }
+      .error {
+        color: #c53030;
+        background: #fed7d7;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Sign in to ReqEngine</h1>
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      <form method="post" action="/login">
+        <label for="name">Username</label>
+        <input id="name" name="name" type="text" autocomplete="username" required autofocus />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
+  </body>
+</html>
