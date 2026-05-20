@@ -22,6 +22,7 @@ class LinkCreate(BaseModel):
     link_type: LinkType
     link_start_project_id: str
     link_destination_project_id: str
+    project_id_number: int
 
     @field_validator("link_start_project_id", "link_destination_project_id")
     @classmethod
@@ -35,6 +36,7 @@ class LinkOut(BaseModel):
 
     id: int
     project_id: str
+    project_id_number: int
     link_type: str
     link_start_kind: str
     link_start: int

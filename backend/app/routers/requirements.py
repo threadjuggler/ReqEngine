@@ -2,13 +2,14 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import get_current_user
 from app.models.link import Link
+from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import Testcase
 from app.schemas.requirement import (
@@ -24,23 +25,28 @@ from app.services.counter import format_project_id, reserve_project_number
 
 router = APIRouter(prefix="/api/requirements", tags=["requirements"])
 
-PROJECT_NAME = "Project1"
-
 
 @router.post("/reserve-id", response_model=ReserveIdOut)
-async def reserve_id(session: AsyncSession = Depends(get_session)) -> ReserveIdOut:
-    """Atomically reserve a new project number and return the formatted project_id."""
-    number = await reserve_project_number(session, PROJECT_NAME)
-    project_id = format_project_id(PROJECT_NAME, number)
+async def reserve_id(
+    project_name: str = Query(default="Project1"),
+    session: AsyncSession = Depends(get_session),
+) -> ReserveIdOut:
+    """Atomically reserve a new project number; project_name defaults to 'Project1'."""
+    number = await reserve_project_number(session, project_name)
+    project_id = format_project_id(project_name, number)
     return ReserveIdOut(requirement_number=number, project_id=project_id)
 
 
 @router.get("", response_model=list[RequirementSummaryOut])
 async def list_requirements(
+    project_id_number: int | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> list[RequirementSummaryOut]:
-    """Return summary list of all requirements ordered by id."""
-    result = await session.execute(select(Requirement).order_by(Requirement.id))
+    """Return summary list of requirements; optionally filter by project_id_number."""
+    stmt = select(Requirement).order_by(Requirement.id)
+    if project_id_number is not None:
+        stmt = stmt.where(Requirement.project_id_number == project_id_number)
+    result = await session.execute(stmt)
     reqs = result.scalars().all()
     return [RequirementSummaryOut.model_validate(r) for r in reqs]
 
@@ -56,7 +62,6 @@ async def get_requirement(
     if req is None:
         raise HTTPException(status_code=404, detail="Requirement not found.")
 
-    # All links that touch this requirement on either side
     link_rows = await session.execute(
         select(Link).where(
             or_(
@@ -70,8 +75,6 @@ async def get_requirement(
     )
     all_links = list(link_rows.scalars().all())
 
-    # Collect every endpoint referenced (both start AND destination of every link),
-    # then batch-resolve project_ids and titles in two queries.
     needed_req_ids: set[int] = set()
     needed_tc_ids: set[int] = set()
     for lnk in all_links:
@@ -102,7 +105,6 @@ async def get_requirement(
         start_obj = lookup(lnk.link_start_kind, lnk.link_start)
         dest_obj = lookup(lnk.link_destination_kind, lnk.link_destination)
         if start_obj is None or dest_obj is None:
-            # Dangling link (an endpoint was deleted) — skip
             continue
         if lnk.link_start_kind == "requirement" and lnk.link_start == req_id:
             other_kind, other_obj = lnk.link_destination_kind, dest_obj
@@ -134,11 +136,26 @@ async def create_requirement(
     session: AsyncSession = Depends(get_session),
     current_user: str = Depends(get_current_user),
 ) -> RequirementDetailOut:
-    """Create a new requirement using a pre-reserved requirement_number."""
+    """Create a new requirement; validates project exists and project_id prefix matches."""
+    proj_result = await session.execute(
+        select(Project).where(Project.id == body.project_id_number)
+    )
+    project = proj_result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=422, detail="project_id_number references unknown project.")
+    if not body.project_id.startswith(project.project_name):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"project_id '{body.project_id}' does not match "
+                f"project_name '{project.project_name}'."
+            ),
+        )
     now = datetime.now(tz=UTC)
     req = Requirement(
         requirement_number=body.requirement_number,
         project_id=body.project_id,
+        project_id_number=body.project_id_number,
         title=body.title,
         description=body.description,
         status=body.status.value,
@@ -194,7 +211,6 @@ async def delete_requirement(
     if req is None:
         raise HTTPException(status_code=404, detail="Requirement not found.")
 
-    # No more FK cascade — links are polymorphic, so app-level delete by (kind, id) match
     await session.execute(
         delete(Link).where(
             or_(

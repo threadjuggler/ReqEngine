@@ -5,8 +5,14 @@
  */
 
 import type {
+  Document,
+  DocumentContent,
+  DocumentSummary,
   LinkCreateBody,
   LinkOut,
+  ProjectDetail,
+  ProjectListItem,
+  ProjectOut,
   RequirementCreateBody,
   RequirementDetail,
   RequirementSummary,
@@ -58,13 +64,17 @@ async function request<T>(
 }
 
 /** Reserve a new project_id for a forthcoming requirement creation. */
-export async function reserveId(): Promise<ReserveIdOut> {
-  return request<ReserveIdOut>('/requirements/reserve-id', { method: 'POST' });
+export async function reserveId(projectName = 'Project1'): Promise<ReserveIdOut> {
+  return request<ReserveIdOut>(
+    `/requirements/reserve-id?project_name=${encodeURIComponent(projectName)}`,
+    { method: 'POST' },
+  );
 }
 
-/** Fetch the list of all requirements (summary projection). */
-export async function listRequirements(): Promise<RequirementSummary[]> {
-  return request<RequirementSummary[]>('/requirements');
+/** Fetch the list of all requirements (summary projection), optionally filtered by project. */
+export async function listRequirements(projectIdNumber?: number): Promise<RequirementSummary[]> {
+  const qs = projectIdNumber !== undefined ? `?project_id_number=${projectIdNumber}` : '';
+  return request<RequirementSummary[]>(`/requirements${qs}`);
 }
 
 /** Fetch full detail for a single requirement by its numeric database id. */
@@ -117,4 +127,60 @@ export async function updateLink(linkId: number, body: LinkCreateBody): Promise<
 /** Delete a link by its numeric id. */
 export async function deleteLink(linkId: number): Promise<void> {
   return request<void>(`/links/${linkId}`, { method: 'DELETE' });
+}
+
+// ---- Project API ----
+
+/** Fetch the list of all projects with document_count. */
+export async function listProjects(): Promise<ProjectListItem[]> {
+  return request<ProjectListItem[]>('/projects');
+}
+
+/** Create a new project by name. */
+export async function createProject(projectName: string): Promise<ProjectOut> {
+  return request<ProjectOut>('/projects', {
+    method: 'POST',
+    body: JSON.stringify({ project_name: projectName }),
+  });
+}
+
+/** Fetch full project detail including document_ids. */
+export async function getProject(id: number): Promise<ProjectDetail> {
+  return request<ProjectDetail>(`/projects/${id}`);
+}
+
+/** Fetch summary list of documents belonging to a project. */
+export async function listProjectDocuments(projectId: number): Promise<DocumentSummary[]> {
+  return request<DocumentSummary[]>(`/projects/${projectId}/documents`);
+}
+
+// ---- Document API ----
+
+/** Create a blank document within a project. */
+export async function createDocument(projectIdNumber: number): Promise<Document> {
+  return request<Document>('/documents', {
+    method: 'POST',
+    body: JSON.stringify({ project_id_number: projectIdNumber }),
+  });
+}
+
+/** Fetch a full document including document_content. */
+export async function getDocument(id: number): Promise<Document> {
+  return request<Document>(`/documents/${id}`);
+}
+
+/** Save updated document_content (PUT /api/documents/:id). */
+export async function updateDocument(
+  id: number,
+  documentContent: DocumentContent,
+): Promise<Document> {
+  return request<Document>(`/documents/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ document_content: documentContent }),
+  });
+}
+
+/** Delete a document by its numeric id. */
+export async function deleteDocument(id: number): Promise<void> {
+  return request<void>(`/documents/${id}`, { method: 'DELETE' });
 }

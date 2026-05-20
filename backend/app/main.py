@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import AsyncSessionLocal
-from app.routers import links, requirements, testcases
+from app.routers import documents, links, projects, requirements, testcases
 from app.services.seed import run_seed
 
 
@@ -36,6 +36,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(projects.router)
+app.include_router(documents.router)
 app.include_router(requirements.router)
 app.include_router(links.router)
 app.include_router(testcases.router)

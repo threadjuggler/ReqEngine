@@ -1,7 +1,7 @@
 /**
  * Edit/create form for a requirement.
- * Handles both /requirements/new (calls reserve-id on mount, then POST on save)
- * and /requirements/:id (loads full detail, then PUT on save).
+ * Handles /requirements/new, /projects/:projectId/requirements/new, and /requirements/:id.
+ * Calls reserve-id on mount for new forms, then POST on save.
  * Tracks dirty state and shows confirm dialogs for navigation-away when dirty.
  */
 
@@ -9,11 +9,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   createRequirement,
+  getProject,
   getRequirement,
   reserveId,
   updateRequirement,
 } from '../api/client';
-import type { LinkItem, RequirementDetail, RequirementStatus, RequirementType } from '../api/types';
+import type { LinkItem, ProjectDetail, RequirementDetail, RequirementStatus, RequirementType } from '../api/types';
 import {
   STATUS_LABELS,
   STATUS_VALUES,
@@ -43,18 +44,22 @@ const EMPTY_FORM: FormState = {
 
 /**
  * Renders the requirement create/edit form.
- * On new: reserves an ID on mount; on existing: loads detail from API.
- * Save, Clear Form, and Discard buttons all respect dirty-state confirmation.
+ * On new: reserves an ID on mount (using projectId from route if present).
+ * On existing: loads detail from API. Save/Clear/Discard respect dirty-state.
  */
 export function RequirementEdit() {
-  const { id } = useParams<{ id: string }>();
+  const { id, projectId } = useParams<{ id: string; projectId: string }>();
   const isNew = id === undefined;
   const navigate = useNavigate();
   const { isDirty, markDirty, resetDirty } = useDirtyForm();
 
+  // Project info (loaded when projectId is in the route — used for reserve-id project name)
+  const [_project, setProject] = useState<ProjectDetail | null>(null);
+
   // Reserved ID for the new form (stable across Clear Form)
   const [reservedProjectId, setReservedProjectId] = useState<string | null>(null);
   const [reservedNumber, setReservedNumber] = useState<number | null>(null);
+  const [reservedProjectIdNumber, setReservedProjectIdNumber] = useState<number | null>(null);
 
   // Saved requirement detail (null = new unsaved form)
   const [savedDetail, setSavedDetail] = useState<RequirementDetail | null>(null);
@@ -105,9 +110,22 @@ export function RequirementEdit() {
     setPageError(null);
     try {
       if (isNew) {
-        const reserved = await reserveId();
+        // Use the project from the route param if present, otherwise default to Project1
+        let projName = 'Project1';
+        let projIdNum: number | undefined;
+        if (projectId !== undefined) {
+          projIdNum = parseInt(projectId, 10);
+          const proj = await getProject(projIdNum);
+          setProject(proj);
+          projName = proj.project_name;
+        }
+        const reserved = await reserveId(projName);
         setReservedProjectId(reserved.project_id);
         setReservedNumber(reserved.requirement_number);
+        // Store project_id_number for the create call
+        if (projIdNum !== undefined) {
+          setReservedProjectIdNumber(projIdNum);
+        }
         setForm(EMPTY_FORM);
         lastSavedForm.current = EMPTY_FORM;
         setSavedOnce(false);
@@ -152,9 +170,12 @@ export function RequirementEdit() {
         if (reservedProjectId === null || reservedNumber === null) {
           throw new Error('No reserved ID available.');
         }
+        // project_id_number is required by the backend; default to 1 (Project1) if not set
+        const projIdNum = reservedProjectIdNumber ?? 1;
         detail = await createRequirement({
           requirement_number: reservedNumber,
           project_id: reservedProjectId,
+          project_id_number: projIdNum,
           title: form.title,
           description: form.description,
           status: form.status,
@@ -194,14 +215,20 @@ export function RequirementEdit() {
     resetDirty();
   }
 
-  /** Discard: navigate back to list, confirming if dirty. */
+  /** Discard: navigate back to project requirements or home, confirming if dirty. */
   function handleDiscard() {
     if (isDirty) {
       const confirmed = window.confirm('You have unsaved changes. Discard them?');
       if (!confirmed) return;
     }
     resetDirty();
-    void navigate('/');
+    if (projectId !== undefined) {
+      void navigate(`/projects/${projectId}/requirements`);
+    } else if (savedDetail?.project_id_number !== undefined) {
+      void navigate(`/projects/${savedDetail.project_id_number}/requirements`);
+    } else {
+      void navigate('/');
+    }
   }
 
   /** Refresh the links list after a link is created or deleted. */

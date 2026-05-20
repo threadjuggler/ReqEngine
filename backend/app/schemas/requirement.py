@@ -32,6 +32,7 @@ class RequirementCreate(BaseModel):
 
     requirement_number: int
     project_id: str
+    project_id_number: int
     title: str
     description: str = ""
     status: RequirementStatus = RequirementStatus.draft
@@ -117,6 +118,7 @@ class RequirementSummaryOut(BaseModel):
 
     id: int
     project_id: str
+    project_id_number: int
     title: str
     status: str
     requirement_type: str
@@ -131,6 +133,7 @@ class RequirementDetailOut(BaseModel):
     id: int
     requirement_number: int
     project_id: str
+    project_id_number: int
     title: str
     description: str
     status: str

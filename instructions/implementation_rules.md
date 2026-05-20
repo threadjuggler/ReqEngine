@@ -8,6 +8,7 @@ the implementer agent shall always check if the package he is supposed to use ha
 if something is not clear any agent shall always ask before starting to work
 each python method or test case shall have a doc string of maximum 5 lines that describe roughly what the function is doing.
 to implement tests always the package robotframework for python shall be used
-the ruff package shall be used for syntax checks
+the ruff package shall be used for syntax checks 
+
 
 

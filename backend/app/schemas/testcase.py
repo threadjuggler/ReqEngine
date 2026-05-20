@@ -10,6 +10,7 @@ class TestcaseOut(BaseModel):
 
     id: int
     project_id: str
+    project_id_number: int
     title: str
     description: str
     test_state: str

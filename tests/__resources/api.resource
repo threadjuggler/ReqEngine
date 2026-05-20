@@ -14,20 +14,24 @@ Create API Session
 
 Reserve New ID
     [Documentation]    Call POST /requirements/reserve-id and return the parsed JSON body.
+    ...                Accepts optional project_name param (defaults to Project1).
     ...                Returns a dict with keys: requirement_number (int), project_id (str).
-    ${resp}=    Post On Session    api    /requirements/reserve-id    expected_status=200
+    [Arguments]    ${project_name}=Project1
+    ${resp}=    Post On Session    api    url=/requirements/reserve-id?project_name=${project_name}    expected_status=200
     RETURN    ${resp.json()}
 
 Create Requirement
     [Documentation]    POST /requirements with provided fields and return the parsed JSON body.
-    ...                Arguments: requirement_number (int), project_id (str), title (str),
-    ...                description (str), status (str), requirement_type (str), revision (str).
+    ...                Accepts project_id_number (defaults to 1) for multi-project support.
+    ...                Arguments: requirement_number, project_id, title, description, status, type, revision.
     [Arguments]    ${requirement_number}    ${project_id}    ${title}
     ...            ${description}=    ${status}=draft
     ...            ${requirement_type}=system_requirement    ${revision}=0.1
+    ...            ${project_id_number}=${1}
     ${payload}=    Create Dictionary
     ...            requirement_number=${requirement_number}
     ...            project_id=${project_id}
+    ...            project_id_number=${project_id_number}
     ...            title=${title}
     ...            description=${description}
     ...            status=${status}
@@ -45,8 +49,13 @@ Get Requirement
 
 List Requirements
     [Documentation]    GET /requirements and return the parsed JSON list of summary dicts.
-    ...                Returns a list of summary objects (id, project_id, title, status, etc.).
-    ${resp}=    Get On Session    api    /requirements    expected_status=200
+    ...                Accepts optional project_id_number filter (pass ${NONE} to omit).
+    [Arguments]    ${project_id_number}=${NONE}
+    IF    $project_id_number is not None
+        ${resp}=    Get On Session    api    url=/requirements?project_id_number=${project_id_number}    expected_status=200
+    ELSE
+        ${resp}=    Get On Session    api    /requirements    expected_status=200
+    END
     RETURN    ${resp.json()}
 
 Update Requirement
@@ -72,12 +81,14 @@ Delete Requirement
 
 Create Link
     [Documentation]    POST /links with link_type, start and destination project_ids; returns parsed JSON.
-    ...                Arguments: link_type (str), start_project_id (str), dest_project_id (str).
-    [Arguments]    ${link_type}    ${start_project_id}    ${dest_project_id}    ${expected_status}=201
+    ...                Accepts project_id_number (defaults to 1) for multi-project support.
+    [Arguments]    ${link_type}    ${start_project_id}    ${dest_project_id}
+    ...            ${expected_status}=201    ${project_id_number}=${1}
     ${payload}=    Create Dictionary
     ...            link_type=${link_type}
     ...            link_start_project_id=${start_project_id}
     ...            link_destination_project_id=${dest_project_id}
+    ...            project_id_number=${project_id_number}
     ${resp}=    Post On Session    api    /links    json=${payload}    expected_status=${expected_status}
     RETURN    ${resp.json()}
 
@@ -86,4 +97,62 @@ Delete Link
     ...                Returns the raw response object for optional further inspection.
     [Arguments]    ${link_id}    ${expected_status}=204
     ${resp}=    Delete On Session    api    /links/${link_id}    expected_status=${expected_status}
+    RETURN    ${resp}
+
+Create Project
+    [Documentation]    POST /projects with project_name; asserts 201 by default.
+    ...                Returns the parsed JSON body (id, project_name, user_ids, created_on).
+    [Arguments]    ${project_name}    ${expected_status}=201
+    ${payload}=    Create Dictionary    project_name=${project_name}
+    ${resp}=    Post On Session    api    /projects    json=${payload}    expected_status=${expected_status}
+    RETURN    ${resp.json()}
+
+List Projects
+    [Documentation]    GET /projects and return the parsed JSON list of project summary dicts.
+    ...                Each item has id, project_name, user_ids, document_count.
+    ${resp}=    Get On Session    api    /projects    expected_status=200
+    RETURN    ${resp.json()}
+
+Get Project
+    [Documentation]    GET /projects/{project_id} and return the parsed JSON detail dict.
+    ...                Returns id, project_name, user_ids, created_on, document_ids, document_count.
+    [Arguments]    ${project_id}    ${expected_status}=200
+    ${resp}=    Get On Session    api    /projects/${project_id}    expected_status=${expected_status}
+    RETURN    ${resp.json()}
+
+List Project Documents
+    [Documentation]    GET /projects/{project_id}/documents and return the parsed JSON list.
+    ...                Each item is a DocumentSummaryOut with id, project_id, author, last_edit_on.
+    [Arguments]    ${project_id}    ${expected_status}=200
+    ${resp}=    Get On Session    api    /projects/${project_id}/documents    expected_status=${expected_status}
+    RETURN    ${resp.json()}
+
+Create Document
+    [Documentation]    POST /documents with project_id_number; asserts 201 by default.
+    ...                Returns the full DocumentOut including document_content.
+    [Arguments]    ${project_id_number}    ${expected_status}=201
+    ${payload}=    Create Dictionary    project_id_number=${project_id_number}
+    ${resp}=    Post On Session    api    /documents    json=${payload}    expected_status=${expected_status}
+    RETURN    ${resp.json()}
+
+Get Document
+    [Documentation]    GET /documents/{doc_id} and return the parsed JSON body.
+    ...                Returns full DocumentOut including document_content.
+    [Arguments]    ${doc_id}    ${expected_status}=200
+    ${resp}=    Get On Session    api    /documents/${doc_id}    expected_status=${expected_status}
+    RETURN    ${resp.json()}
+
+Update Document
+    [Documentation]    PUT /documents/{doc_id} with document_content dict; returns parsed JSON.
+    ...                Accepts expected_status override for error-case tests.
+    [Arguments]    ${doc_id}    ${document_content}    ${expected_status}=200
+    ${payload}=    Create Dictionary    document_content=${document_content}
+    ${resp}=    Put On Session    api    /documents/${doc_id}    json=${payload}    expected_status=${expected_status}
+    RETURN    ${resp.json()}
+
+Delete Document
+    [Documentation]    DELETE /documents/{doc_id}; expects 204 No Content by default.
+    ...                Pass expected_status=any to allow 404 in best-effort teardown.
+    [Arguments]    ${doc_id}    ${expected_status}=204
+    ${resp}=    Delete On Session    api    /documents/${doc_id}    expected_status=${expected_status}
     RETURN    ${resp}

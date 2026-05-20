@@ -1,6 +1,7 @@
 *** Settings ***
 Documentation       Suite 2: Link create/delete and cascade rules.
 ...                 Tests link creation, validation, GET side-effects, deletion, and cascade on requirement delete.
+...                 Also verifies that cross-project links are rejected with 422.
 Resource            __resources/api.resource
 Suite Setup         Create API Session
 Test Teardown       Cleanup Linked Requirements
@@ -95,16 +96,34 @@ Cascade Delete Req A Removes Link From Req B
     ${detail_b}=    Get Requirement    ${b}[id]
     Length Should Be    ${detail_b}[list_of_links]    0
 
+Cross-Project Link Is Rejected With 422
+    [Documentation]    POST /links with start in Project1 and dest in Project2 must return 422.
+    ...                Both endpoints must belong to the same project_id_number.
+    ${reserved_p1}=    Reserve New ID    Project1
+    ${req_p1}=    Create Requirement
+    ...    ${reserved_p1}[requirement_number]    ${reserved_p1}[project_id]
+    ...    Cross Link P1 Req    ${EMPTY}    draft    system_requirement    0.1    ${1}
+    Set Suite Variable    ${req_a_id}    ${req_p1}[id]
+    ${reserved_p2}=    Reserve New ID    Project2
+    ${req_p2}=    Create Requirement
+    ...    ${reserved_p2}[requirement_number]    ${reserved_p2}[project_id]
+    ...    Cross Link P2 Req    ${EMPTY}    draft    system_requirement    0.1    ${2}
+    Set Suite Variable    ${req_b_id}    ${req_p2}[id]
+    Set Suite Variable    ${link_id}    ${NONE}
+    # project_id_number=1 but dest belongs to project 2 → 422
+    Create Link    refines    ${req_p1}[project_id]    ${req_p2}[project_id]
+    ...    expected_status=422    project_id_number=${1}
+
 
 *** Keywords ***
 Reserve And Create Requirement
-    [Documentation]    Reserve an ID and create a requirement with the given title.
+    [Documentation]    Reserve an ID from Project1 and create a requirement with the given title.
     ...                Returns the full requirement detail dict including id and project_id.
     [Arguments]    ${title}
-    ${reserved}=    Reserve New ID
+    ${reserved}=    Reserve New ID    Project1
     ${req}=    Create Requirement
     ...    ${reserved}[requirement_number]    ${reserved}[project_id]
-    ...    ${title}    ${EMPTY}    draft    system_requirement
+    ...    ${title}    ${EMPTY}    draft    system_requirement    0.1    ${1}
     RETURN    ${req}
 
 Cleanup Linked Requirements

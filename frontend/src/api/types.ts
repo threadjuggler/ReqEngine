@@ -1,6 +1,7 @@
 /**
  * TypeScript types mirroring the backend Pydantic schemas.
  * All string-literal union types match backend enum values exactly.
+ * Includes Project, Document, Requirement, Link, and Testcase types.
  */
 
 /** Allowed status values for a requirement. */
@@ -45,6 +46,7 @@ export interface LinkItem {
 export interface RequirementSummary {
   id: number;
   project_id: string;
+  project_id_number: number;
   title: string;
   status: string;
   requirement_type: string;
@@ -56,6 +58,7 @@ export interface RequirementDetail {
   id: number;
   requirement_number: number;
   project_id: string;
+  project_id_number: number;
   title: string;
   description: string;
   status: string;
@@ -78,6 +81,7 @@ export interface ReserveIdOut {
 export interface RequirementCreateBody {
   requirement_number: number;
   project_id: string;
+  project_id_number: number;
   title: string;
   description: string;
   status: RequirementStatus;
@@ -157,3 +161,63 @@ export const TYPE_VALUES: RequirementType[] = [
 
 /** All valid link type values in order for use in dropdowns. */
 export const LINK_TYPE_VALUES: LinkType[] = ['refines', 'depends_on', 'tested_by'];
+
+// ---- Project types ----
+
+/** Project list item (GET /api/projects). */
+export interface ProjectListItem {
+  id: number;
+  project_name: string;
+  user_ids: number[];
+  document_count: number;
+}
+
+/** Full project detail (GET /api/projects/:id). */
+export interface ProjectDetail {
+  id: number;
+  project_name: string;
+  user_ids: number[];
+  created_on: string;
+  document_ids: number[];
+  document_count: number;
+}
+
+/** Minimal project returned on POST /api/projects. */
+export interface ProjectOut {
+  id: number;
+  project_name: string;
+  user_ids: number[];
+  created_on: string;
+}
+
+// ---- Document types ----
+
+/** Recursive TipTap document content node. */
+export interface DocumentContent {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: DocumentContent[];
+  text?: string;
+}
+
+/** Summary document (GET /api/projects/:id/documents). */
+export interface DocumentSummary {
+  id: number;
+  project_id: string;
+  author: string;
+  last_change_by: string;
+  last_edit_on: string;
+  created_on: string;
+}
+
+/** Full document (GET /api/documents/:id, POST/PUT /api/documents). */
+export interface Document {
+  id: number;
+  project_id: string;
+  project_id_number: number;
+  author: string;
+  last_change_by: string;
+  created_on: string;
+  last_edit_on: string;
+  document_content: DocumentContent;
+}

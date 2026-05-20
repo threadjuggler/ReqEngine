@@ -256,3 +256,168 @@ docker compose up --build
 - `To Json` keyword is deprecated in RF7/robotframework-requests 0.9.7; replaced with `${resp.json()}` throughout.
 - Added explicit `Library Collections` to suites 03 and 05 (dry-run did not resolve Collections keywords through the resource-level import alone).
 - `Create Link` returns `resp.json()` even for non-201 statuses; callers that expect error responses still get the error body dict.
+
+---
+
+# Step 2 — Project view + Document view (multi-project)
+
+Adds: `Project` table, `Document` table, full multi-project routing, TipTap-based document editor with 8 heading levels and inline requirement nodes.
+
+## Phase 0 (Step 2) — Decisions — RESOLVED 2026-05-20
+
+- D1 **Editor library:** TipTap (`@tiptap/react` + `@tiptap/starter-kit`, plus a custom Heading extension extended to levels 1–8 and a custom Requirement node).
+- D2 **Project scope:** Full multi-project. Project table is real, FK-linked from Requirement/Testcase/Link/Document. Start route becomes the Project view.
+- D3 **Inline requirement (+ button in document):** Creates a real Requirement row via `POST /api/requirements` using a reserve-id call. The document JSON stores a `requirement-ref` node `{ requirement_id, project_id }`. Title and Description fields inside the boxed UI edit the actual Requirement via `PUT /api/requirements/{id}`.
+- D4 **Chapter numbering:** Auto-computed at render time by walking heading nodes in document order. Numbers are NOT stored in the JSON. Editing/inserting/deleting a heading reflows all downstream numbers.
+- D5 **Start route:** `/` is the Project view (project list). No separate "Document view" link from the main page — documents are reached only through a project.
+- D6 **Existing data migration:** Wipe and reseed. Drop existing Requirement/Testcase/Link tables; recreate with `project_id_number` FK NOT NULL. Reseed 2 projects (Project1, Project2), each with its own ProjectCounter row and 3 lorem-ipsum testcases.
+- D7 **`Project.document_ids`:** Derived (computed from `Document` query by `project_id_number`), not stored — same pattern as Step 1's `list_of_links`. Spec line "self growing list of int" is satisfied by the derived list.
+- D8 **`Project.user_ids`:** Stored as a JSON column (Postgres `JSONB`), default `[10, 20]`.
+- D9 **DIN A4 page:** Rendered as a fixed-width white surface (210mm equivalent, ~794px at 96dpi) on a light gray background, with shadow. Vertical extent grows with content.
+- D10 **Save semantics:** Document save is explicit (Save button in the toolbar). The Requirement rows inside the document persist independently the moment they are added/edited (so the document JSON ref is never dangling).
+
+## Phase 1 (Step 2) — Backend models & migration
+
+1. New SQLAlchemy model `Project`:
+   - `id` int PK
+   - `project_name` String(120) UNIQUE NOT NULL
+   - `user_ids` JSONB, default `[10, 20]`
+   - `created_on` timestamp
+   - (No stored `document_ids` — derive via relationship/query)
+2. New SQLAlchemy model `Document`:
+   - `id` int PK
+   - `project_id` String(100) UNIQUE — uses the existing shared per-project counter via `format_project_id(project_name, n)` + `reserve_project_number`
+   - `project_id_number` int FK → `project.id` NOT NULL, indexed
+   - `created_on` timestamp
+   - `last_edit_on` timestamp
+   - `author` String(100) — `User1` for step
+   - `last_change_by` String(100)
+   - `document_content` JSONB — the TipTap doc JSON
+3. Add `project_id_number` FK column to `Requirement`, `Testcase`, `Link` (NOT NULL, indexed).
+4. New Alembic migration `0002_multi_project.py`:
+   - Drop `requirement`, `testcase`, `link`, `project_counter` tables (wipe + reseed per D6).
+   - Create `project` table.
+   - Recreate `project_counter` (key `project_name`).
+   - Recreate `requirement`, `testcase`, `link` with `project_id_number` FK column NOT NULL.
+   - Create `document` table.
+5. Update seed (`app/services/seed.py`) to be idempotent:
+   - Insert `Project(id=1, project_name='Project1')`, `Project(id=2, project_name='Project2')`.
+   - Insert `ProjectCounter('Project1', 1)` and `ProjectCounter('Project2', 1)`.
+   - Insert 3 lorem testcases per project, each drawing its project_id from its project's counter.
+
+## Phase 2 (Step 2) — Backend API
+
+New routes:
+- `GET /api/projects` → list `[{id, project_name, user_ids, document_count}]`.
+- `POST /api/projects` → create `{project_name}`; auto-creates a `ProjectCounter(project_name, 1)`.
+- `GET /api/projects/{id}` → detail incl. derived `document_ids` and `user_ids`.
+- `GET /api/projects/{id}/documents` → list documents `[{id, project_id, author, last_edit_on}]`.
+- `POST /api/documents` body `{project_id_number}` → creates a blank document with empty content `{type:'doc', content:[]}`, allocates a `project_id` from the project's counter, sets `author='User1'`, returns full document.
+- `GET /api/documents/{id}` → full document including `document_content`.
+- `PUT /api/documents/{id}` body `{document_content}` → save; updates `last_change_by`, `last_edit_on`.
+- `DELETE /api/documents/{id}` → delete.
+
+Updated routes:
+- `POST /api/requirements/reserve-id` now accepts `?project_name=` (defaults `Project1`).
+- `POST /api/requirements` requires `project_id_number` in body.
+- `POST /api/links` requires `project_id_number` in body (validates both endpoints belong to that project).
+- `GET /api/requirements` and `GET /api/testcases` accept optional `?project_id_number=` filter.
+
+Sanitization helper unchanged (already strips HTML to plain text). For document_content JSON: validate it is a dict with `type:'doc'`; recursively sanitize all text node values via the same `bleach` helper; reject any node `type` not in the allowlist `[doc, paragraph, heading, requirement-ref, text]`.
+
+## Phase 3 (Step 2) — Frontend routing + Project view
+
+1. Install `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/pm` (pin versions compatible with React 18 / Vite 5 / Node 18).
+2. New route table:
+   - `/` → `ProjectListPage` (replaces current RequirementList as home)
+   - `/projects/:projectId` → `ProjectDetailPage` (documents list + "Requirements" sub-link)
+   - `/projects/:projectId/documents/new` → `DocumentEditorPage` (creates blank doc on mount)
+   - `/documents/:documentId` → `DocumentEditorPage` (loads existing)
+   - `/projects/:projectId/requirements` → `RequirementListPage` (project-scoped list with "New Requirement" button)
+   - `/requirements/:id` → `RequirementEdit` (existing, unchanged UI; project_id_number derived from loaded requirement)
+   - `/projects/:projectId/requirements/new` → `RequirementEdit` (new form, passes project_id_number to reserve-id + create)
+3. `ProjectListPage`:
+   - Top button bar with "Create New Project" button (modal for project_name).
+   - Table of projects (id, project_name, document_count) — each row clickable to detail.
+4. `ProjectDetailPage`:
+   - Top button bar with "Create New Document" button.
+   - Two sub-tabs/sections: Documents (table) and Requirements (link to `/projects/:projectId/requirements`).
+5. API client (`src/api/client.ts`) extended with `listProjects`, `createProject`, `getProject`, `listProjectDocuments`, `createDocument`, `getDocument`, `updateDocument`, `deleteDocument`, plus project-filter params on existing list endpoints.
+
+## Phase 4 (Step 2) — Frontend document editor (TipTap)
+
+1. `DocumentEditorPage`:
+   - DIN A4 page surface (`.document-page` CSS class, ~794px wide white box, shadow, light-gray surrounding background, grows vertically).
+   - Top toolbar: style dropdown (`Standard`, `Heading 1`..`Heading 8`), font family dropdown (Arial default), font-size dropdown (default 10), bold/italic/underline buttons, `+ Add Requirement` button with type dropdown (the 4 requirement_types), Save button.
+2. Custom TipTap extensions:
+   - `HeadingExt` — copies starter-kit `Heading` config but extends `levels: [1,2,3,4,5,6,7,8]`.
+   - `RequirementRef` — atomic block node with attrs `{ requirement_id, project_id }`. Renders the black-framed box with project_name label, Title input (single line, debounced PUT), Description textarea (multi-line, debounced PUT), and a small "type" badge. NodeView in React.
+3. Chapter numbering: a TipTap decoration plugin that scans the document on every transaction, computes the `X.Y.Z` prefix per heading (per D4 rules), and renders it as a non-editable prefix span. Pseudocode:
+   - Maintain `counters = [0,0,0,0,0,0,0,0]`.
+   - For each heading in doc order at level L (1-indexed):
+     - Increment `counters[L-1]`.
+     - Zero out `counters[L..7]`.
+     - Number string = join non-zero counters with `.` (up to and including L).
+   - Render prefix before heading text content.
+4. Default styling (in `global.css`):
+   - `.document-page p` → Arial, 10pt, black.
+   - `.document-page h1..h8` → dark gray (`#555`), bold; sizes scale roughly from 24pt down to 10pt.
+5. Add Requirement flow:
+   - On `+ Add Requirement` (type chosen from dropdown), call `POST /api/requirements/reserve-id?project_name=...` then `POST /api/requirements` with default title="", description="", chosen type, status="draft", revision="0.1", author="User1", project_id_number=this project. Insert a `RequirementRef` node at cursor referencing the new id.
+   - Editing title/description in the box triggers a debounced (500ms) `PUT /api/requirements/{id}`.
+   - On `Save` button: `PUT /api/documents/{id}` with the full JSON.
+6. Hyperlink semantics inside the document: clicking a `RequirementRef` box header navigates to `/requirements/:id` (with dirty-check confirm dialog if document has unsaved changes).
+
+## Phase 5 (Step 2) — Robot tests
+
+1. New suite `06_projects.robot` — create/list/detail/delete; uniqueness of project_name.
+2. New suite `07_documents.robot` — create blank doc, save content, reload roundtrip, delete cascades.
+3. New suite `08_document_inline_requirement.robot` — flow that reserves id, creates a Requirement, embeds ref in document_content, saves, reloads, ref still points at the right requirement.
+4. New suite `09_chapter_numbering.robot` — pure unit-style: POST a document JSON with mixed heading levels, GET it back, run a Python keyword that re-derives numbers and asserts the expected `X.Y.Z` sequence.
+5. Update existing suites 01–05 to pass `project_id_number` where required by the new request bodies; update `03_id_allocation` to assert per-project independence (Project1 and Project2 increment independently).
+6. Refresh `__resources/api.resource` with `Create Project`, `Create Document`, `Update Document`, etc.
+
+## Phase 6 (Step 2) — Wrap-up
+
+1. Update root `README.md` with the new routes and the multi-project model.
+2. Update `.env.example` if any new env vars needed (none expected).
+3. Run `uv run ruff check .`, `npm run build`, `docker compose up --build`, `robot tests/`.
+4. Opus final review.
+
+---
+
+## Progress log (Step 2)
+
+- 2026-05-20: Step 2 tasks.md drafted. Decisions D1–D10 resolved. Spawning Sonnet 4.6 implementer for Phase 1 (models + migration + seed) + Phase 2 (API routes). Frontend (Phases 3–4) and tests (Phase 5) deferred to follow-up implementer spawns after review.
+- 2026-05-20: Phases 1–2 (Step 2) implemented by Sonnet 4.6. Migration is `0003_multi_project.py` chaining onto a pre-existing `0002_polymorphic_links.py` (a Step 1 follow-on not previously logged — links can now point at either requirements or testcases). Backend verified: ruff clean, app imports, `alembic history` parses (chain 0001→0002→0003), all 8 new routes (`/api/projects` × 4, `/api/documents` × 4) registered alongside the updated requirement/link/testcase routes which now require `project_id_number`. Sanitizer wired via Pydantic `field_validator`. `documents` and `projects` table names plural-consistent with raw SQL in `create_project`. Spawning Sonnet 4.6 implementer for Phases 3–4 (frontend).
+- 2026-05-20: Phases 3–4 (Step 2 frontend) implemented by Sonnet 4.6. TipTap 3.23.5 pinned (compatible with React 18.3 / Vite 5.4 / Node 18.19). New routes: `/` → ProjectListPage (new home), `/projects/:id` → ProjectDetailPage, `/documents/:id` → DocumentEditorPage with DIN A4 surface + toolbar (Standard / Heading 1–8 / font / size / B / I / U / + Requirement / Save), custom HeadingExt extends levels to 1–8 (h7/h8 render as `<div class="heading-N">`), ChapterNumbering implemented as a TipTap Extension wrapping a ProseMirror plugin (widget decorations, non-stored), RequirementRef atomic node + NodeView with debounced PUT on title/description edits. `npm run build` exits 0; TS strict; one expected 581KB bundle-size warning (TipTap). Spawning Sonnet 4.6 implementer for Phase 5 (Robot tests).
+- 2026-05-20: Phase 5 (Step 2 Robot tests) implemented by Sonnet 4.6. 4 new suites (06_projects, 07_documents, 08_document_inline_requirement, 09_chapter_numbering) + updates to 01–05 to pass `project_id_number`. New Python library `tests/lib/chapter_numbering.py` reimplements the chapter-numbering algorithm to data-test it independently from the frontend. `uv --project backend run robot --dryrun tests/` → **45 tests, 45 passed, 0 failed** (was 23 after Step 1).
+
+---
+
+## Step 2 status: COMPLETE (static verification only — live run pending)
+
+| Phase | Verification | Status |
+|------|-------------|-------|
+| 1 Models + migration | `alembic history` parses chain 0001→0002→0003 | ✓ |
+| 2 API | App imports; 8 new routes registered | ✓ |
+| 3–4 Frontend | `npm run build` exits 0; TS strict | ✓ |
+| 5 Robot tests | `robot --dryrun tests/` → 45/45 | ✓ |
+| Ruff | clean | ✓ |
+
+**Recommended next:** `docker compose up --build` to run `alembic upgrade head` (apply 0003) against live Postgres, then `uv --project backend run robot tests/` end-to-end. This mirrors Step 1's "Live end-to-end verification" pass.
+
+### Live end-to-end fixes — 2026-05-20
+
+Two issues surfaced after the user ran `docker compose up --build`:
+
+1. **Frontend stale node_modules.** Vite errored: `Failed to resolve import "@tiptap/react"`. Root cause: `docker-compose.yml` declared a named volume `frontend_node_modules:/app/node_modules` to defend against host shadowing, but no host bind-mount of `./frontend` exists to defend against. The named volume persisted across `docker compose up --build` and shadowed the freshly built image layer (which DID contain the new TipTap packages via `npm ci`). Fix: removed the named volume + its `volumes:` declaration from `docker-compose.yml`. Now `/app/node_modules` from the image is used directly. Users updating the project must run `docker compose down && docker compose up --build` once to drop the old container that mounts the stale volume.
+
+2. **Robot URL parsing.** 22 of 23 failures shared `TypeError: ...missing 1 required positional argument: 'url'` with the warning `You might have an = symbol in url. You better place 'url=' before`. RF interprets `?param=value` in a URL string as a kwarg. Fix: added `url=` prefix to the three call sites with query strings (`/requirements/reserve-id?project_name=`, `/requirements?project_id_number=`, `/testcases?project_id_number=`).
+
+3. **One residual test failure.** `Project Name HTML Is Sanitized` in `06_projects.robot` used a fixed name `<b>SanitizedProj</b>` and 409'd on the second run because there is no DELETE for projects. Fix: appended a uuid suffix so repeated runs don't collide.
+
+After all three fixes:
+- `docker compose ps` → all 4 services up; postgres + redis healthy.
+- Vite serves `main.tsx` and `DocumentEditorPage.tsx` with HTTP 200 and zero pre-transform errors in frontend logs.
+- `uv --project backend run robot tests/` → **45 tests, 45 passed, 0 failed** (live).

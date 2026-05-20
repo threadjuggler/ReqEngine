@@ -1,6 +1,6 @@
 """Atomic project counter reservation service shared by all object types."""
 
-from sqlalchemy import update
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.project_counter import ProjectCounter
@@ -14,9 +14,9 @@ def format_project_id(project_name: str, number: int) -> str:
 async def reserve_project_number(session: AsyncSession, project_name: str) -> int:
     """Atomically increment next_number for project_name and return the reserved value.
 
-    Shared by Requirements, Links, and Testcases so all project_ids draw from one
-    sequence. Uses UPDATE ... RETURNING to avoid race conditions under concurrent
-    requests. Raises LookupError if no counter row exists for the project_name.
+    If no counter row exists for project_name, creates one (starting at 1) via
+    INSERT ... ON CONFLICT DO NOTHING, then retries the UPDATE. Uses a single
+    UPDATE ... RETURNING to avoid race conditions under concurrent requests.
     """
     stmt = (
         update(ProjectCounter)
@@ -27,6 +27,17 @@ async def reserve_project_number(session: AsyncSession, project_name: str) -> in
     result = await session.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
-        raise LookupError(f"No counter found for project '{project_name}'.")
+        # Auto-create counter row then retry
+        await session.execute(
+            text(
+                "INSERT INTO project_counters (project_name, next_number) "
+                "VALUES (:name, 1) ON CONFLICT DO NOTHING"
+            ),
+            {"name": project_name},
+        )
+        result2 = await session.execute(stmt)
+        row = result2.scalar_one_or_none()
+        if row is None:
+            raise LookupError(f"Could not create or find counter for project '{project_name}'.")
     await session.commit()
     return row - 1

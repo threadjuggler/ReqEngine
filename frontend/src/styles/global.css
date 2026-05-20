@@ -320,6 +320,281 @@ tbody tr.clickable-row:hover {
   font-style: italic;
 }
 
+/* ---- Document Editor Page ---- */
+
+.document-editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #e8e8e8;
+}
+
+/* Fixed toolbar at the top */
+.doc-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.doc-toolbar select {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.doc-toolbar-btn {
+  padding: 3px 8px;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  min-width: 28px;
+}
+
+.doc-toolbar-btn.active {
+  background: #dbeafe;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.doc-toolbar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  margin: 0 2px;
+}
+
+.doc-toolbar-spacer {
+  flex: 1;
+}
+
+.doc-dirty-indicator {
+  font-size: 12px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.doc-save-error {
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+/* DIN A4 page wrapper — scrollable area around the white page */
+.document-page-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/*
+ * DIN A4 white page: 210mm × 297mm at 96dpi → 793.7px × 1122.5px.
+ * Min-height set; grows vertically as content extends.
+ */
+.document-page {
+  width: 794px;
+  min-height: 1123px;
+  background: #ffffff;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+  padding: 72px 80px; /* ~19mm top/bottom, ~21mm left/right margins */
+  box-sizing: border-box;
+}
+
+/* Inner editor area — inherits page styles */
+.document-editor-inner {
+  outline: none;
+  min-height: 100%;
+  width: 100%;
+}
+
+/* ---- Document typography ---- */
+
+.document-page p,
+.document-editor-inner p {
+  font-family: Arial, sans-serif;
+  font-size: 10pt;
+  color: #000000;
+  margin-bottom: 0.5em;
+}
+
+.document-page h1,
+.document-editor-inner h1 {
+  font-family: Arial, sans-serif;
+  font-size: 24pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.8em 0 0.3em;
+}
+
+.document-page h2,
+.document-editor-inner h2 {
+  font-family: Arial, sans-serif;
+  font-size: 20pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.7em 0 0.3em;
+}
+
+.document-page h3,
+.document-editor-inner h3 {
+  font-family: Arial, sans-serif;
+  font-size: 18pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.6em 0 0.3em;
+}
+
+.document-page h4,
+.document-editor-inner h4 {
+  font-family: Arial, sans-serif;
+  font-size: 16pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.5em 0 0.3em;
+}
+
+.document-page h5,
+.document-editor-inner h5 {
+  font-family: Arial, sans-serif;
+  font-size: 14pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.5em 0 0.3em;
+}
+
+.document-page h6,
+.document-editor-inner h6 {
+  font-family: Arial, sans-serif;
+  font-size: 12pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.4em 0 0.25em;
+}
+
+/* Heading levels 7 and 8 rendered as styled divs by the custom HeadingExt */
+.document-page .heading-7,
+.document-editor-inner .heading-7 {
+  font-family: Arial, sans-serif;
+  font-size: 11pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.4em 0 0.25em;
+}
+
+.document-page .heading-8,
+.document-editor-inner .heading-8 {
+  font-family: Arial, sans-serif;
+  font-size: 10pt;
+  color: #555555;
+  font-weight: bold;
+  margin: 0.4em 0 0.25em;
+}
+
+/* ---- Chapter number decoration ---- */
+
+.chapter-number {
+  user-select: none;
+  -webkit-user-select: none;
+  margin-right: 0.5em;
+  color: #555555;
+  font-weight: bold;
+}
+
+/* ---- Requirement box ---- */
+
+.requirement-box {
+  border: 2px solid #000000;
+  padding: 12px;
+  margin: 8px 0;
+  max-width: 60%;
+  float: left;
+  background: #ffffff;
+  border-radius: 2px;
+  clear: left;
+}
+
+.requirement-box-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.requirement-box-project {
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+}
+
+.requirement-type-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: #e3e8ef;
+  border-radius: 3px;
+  font-weight: 600;
+  color: #334;
+}
+
+.requirement-open-link {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
+.requirement-box-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.requirement-box-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #444;
+}
+
+.requirement-box-input {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  width: 100%;
+}
+
+.requirement-box-textarea {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  width: 100%;
+  resize: vertical;
+}
+
 /* ---- Modal overlay ---- */
 
 .modal-overlay {

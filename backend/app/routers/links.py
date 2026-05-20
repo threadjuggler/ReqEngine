@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models.link import Link
+from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import Testcase
 from app.schemas.link import LinkCreate, LinkOut
@@ -13,27 +14,27 @@ from app.services.counter import format_project_id, reserve_project_number
 
 router = APIRouter(prefix="/api/links", tags=["links"])
 
-PROJECT_NAME = "Project1"
 
+async def _resolve_project_id(session: AsyncSession, project_id: str) -> tuple[str, int, int]:
+    """Resolve a human project_id to (kind, numeric_id, project_id_number).
 
-async def _resolve_project_id(session: AsyncSession, project_id: str) -> tuple[str, int]:
-    """Resolve a human project_id to (kind, numeric_id) by checking requirements then testcases.
-
-    Raises HTTP 404 if the project_id matches no row in either table.
-    Returns ('requirement', id) or ('testcase', id).
+    Checks requirements then testcases. Raises HTTP 404 if not found.
+    Returns ('requirement', id, project_id_number) or ('testcase', id, project_id_number).
     """
     req_result = await session.execute(
-        select(Requirement.id).where(Requirement.project_id == project_id)
+        select(Requirement.id, Requirement.project_id_number).where(
+            Requirement.project_id == project_id
+        )
     )
-    req_id = req_result.scalar_one_or_none()
-    if req_id is not None:
-        return ("requirement", req_id)
+    row = req_result.one_or_none()
+    if row is not None:
+        return ("requirement", row[0], row[1])
     tc_result = await session.execute(
-        select(Testcase.id).where(Testcase.project_id == project_id)
+        select(Testcase.id, Testcase.project_id_number).where(Testcase.project_id == project_id)
     )
-    tc_id = tc_result.scalar_one_or_none()
-    if tc_id is not None:
-        return ("testcase", tc_id)
+    tc_row = tc_result.one_or_none()
+    if tc_row is not None:
+        return ("testcase", tc_row[0], tc_row[1])
     raise HTTPException(
         status_code=404, detail=f"No requirement or testcase found with project_id '{project_id}'."
     )
@@ -44,16 +45,34 @@ async def create_link(
     body: LinkCreate,
     session: AsyncSession = Depends(get_session),
 ) -> LinkOut:
-    """Resolve human project_ids (requirement OR testcase) and insert a new link row."""
-    start_kind, start_id = await _resolve_project_id(session, body.link_start_project_id)
-    dest_kind, dest_id = await _resolve_project_id(session, body.link_destination_project_id)
+    """Create a link; validates both endpoints belong to the specified project."""
+    proj_result = await session.execute(
+        select(Project).where(Project.id == body.project_id_number)
+    )
+    project = proj_result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=422, detail="project_id_number references unknown project.")
+
+    start_kind, start_id, start_pin = await _resolve_project_id(
+        session, body.link_start_project_id
+    )
+    dest_kind, dest_id, dest_pin = await _resolve_project_id(
+        session, body.link_destination_project_id
+    )
+
+    if start_pin != body.project_id_number or dest_pin != body.project_id_number:
+        raise HTTPException(
+            status_code=422,
+            detail="Both link endpoints must belong to the specified project_id_number.",
+        )
 
     if start_kind == dest_kind and start_id == dest_id:
         raise HTTPException(status_code=422, detail="link_start and link_destination must differ.")
 
-    number = await reserve_project_number(session, PROJECT_NAME)
+    number = await reserve_project_number(session, project.project_name)
     link = Link(
-        project_id=format_project_id(PROJECT_NAME, number),
+        project_id=format_project_id(project.project_name, number),
+        project_id_number=body.project_id_number,
         link_type=body.link_type.value,
         link_start_kind=start_kind,
         link_start=start_id,
@@ -78,8 +97,17 @@ async def update_link(
     if link is None:
         raise HTTPException(status_code=404, detail="Link not found.")
 
-    start_kind, start_id = await _resolve_project_id(session, body.link_start_project_id)
-    dest_kind, dest_id = await _resolve_project_id(session, body.link_destination_project_id)
+    start_kind, start_id, start_pin = await _resolve_project_id(
+        session, body.link_start_project_id
+    )
+    dest_kind, dest_id, dest_pin = await _resolve_project_id(
+        session, body.link_destination_project_id
+    )
+    if start_pin != body.project_id_number or dest_pin != body.project_id_number:
+        raise HTTPException(
+            status_code=422,
+            detail="Both link endpoints must belong to the specified project_id_number.",
+        )
     if start_kind == dest_kind and start_id == dest_id:
         raise HTTPException(status_code=422, detail="link_start and link_destination must differ.")
 
@@ -88,6 +116,7 @@ async def update_link(
     link.link_start = start_id
     link.link_destination_kind = dest_kind
     link.link_destination = dest_id
+    link.project_id_number = body.project_id_number
     await session.commit()
     await session.refresh(link)
     return LinkOut.model_validate(link)
