@@ -1,4 +1,0 @@
-a document is an object that is used to organize requirement
-all document objects shall be stored in the "documents" table 
-a document object has the following attributes:
-id: int unique for database operations
